@@ -155,8 +155,12 @@
   .progress{
     position:relative; height:6px; border-radius:6px; background:rgba(255,255,255,.12); cursor:pointer;
   }
-  .progress::before{ content:""; position:absolute; inset:-8px 0; } /* área táctil más grande */
+  .progress{ touch-action:none; }
+  .progress::before{ content:""; position:absolute; inset:-16px 0; } /* área táctil más grande */
   .progress i{ position:absolute; left:0; top:0; bottom:0; width:0; border-radius:6px; background:var(--accent); }
+  .progress b{ position:absolute; top:50%; left:0; width:14px; height:14px; margin:-7px 0 0 -7px; border-radius:50%;
+    background:var(--accent); box-shadow:0 0 0 4px rgba(232,184,74,.2); pointer-events:none; }
+  .progress.drag b{ transform:scale(1.25); }
   .vol{ width:90px; accent-color:var(--accent); }
 
   /* ---------- Recorrido ---------- */
@@ -247,9 +251,12 @@
       <button class="icon-btn" id="backBtn" aria-label="Retroceder 10 segundos" disabled>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><text x="12" y="15.5" font-size="7" text-anchor="middle" fill="currentColor" stroke="none" font-family="Inter,Arial" font-weight="700">10</text></svg>
       </button>
+      <button class="icon-btn" id="fwdBtn" aria-label="Adelantar 10 segundos" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/><text x="12" y="15.5" font-size="7" text-anchor="middle" fill="currentColor" stroke="none" font-family="Inter,Arial" font-weight="700">10</text></svg>
+      </button>
       <div class="track">
         <div class="chapter"><span id="chapterLabel">Listo para comenzar</span><span id="timeLabel">0:00 / 0:00</span></div>
-        <div class="progress" id="progress" aria-label="Progreso del capítulo"><i id="progressFill"></i></div>
+        <div class="progress" id="progress" aria-label="Progreso del capítulo"><i id="progressFill"></i><b id="progressThumb"></b></div>
       </div>
       <input class="vol" id="vol" type="range" min="0" max="1" step="0.05" value="1" aria-label="Volumen">
       <button class="icon-btn" id="fsBtn" aria-label="Pantalla completa">
@@ -286,20 +293,23 @@ const DECISIONES = {
   dB: { eyebrow:'Elige tu final', titulo:'Dijo que no. ¿Y ahora qué hace Manuel?', desde:'B',
         opciones:[ { texto:'Se mantiene firme', va:'B1' }, { texto:'Huye con su abuela', va:'B2' } ] }
 };
-/* Audio sin pérdida (FLAC 24-bit) donde el navegador lo soporte; si no, AAC 256 kbps */
-const FLAC_OK = !!(window.MediaSource && MediaSource.isTypeSupported &&
+/* Audio sin pérdida (FLAC 24-bit) en computador; en celular AAC 192 kbps
+   (carga más rápido con datos móviles y permite adelantar sin esperas) */
+const ES_MOVIL = window.matchMedia('(pointer:coarse)').matches && Math.min(screen.width, screen.height) < 820;
+const FLAC_OK = !ES_MOVIL && (!!(window.MediaSource && MediaSource.isTypeSupported &&
   MediaSource.isTypeSupported('audio/mp4; codecs="flac"')) ||
-  !!(window.ManagedMediaSource && ManagedMediaSource.isTypeSupported('audio/mp4; codecs="flac"'));
+  !!(window.ManagedMediaSource && ManagedMediaSource.isTypeSupported('audio/mp4; codecs="flac"')));
 const FUENTE = FLAC_OK ? 'hq/flac/lista.txt' : 'hq/aac/lista.txt';
 
 /* ===================== ELEMENTOS ===================== */
 const $ = id => document.getElementById(id);
 const video = $('video'), stage = $('stage');
 const startLayer = $('startLayer'), decisionLayer = $('decisionLayer'), endLayer = $('endLayer');
-const playBtn = $('playBtn'), backBtn = $('backBtn'), fsBtn = $('fsBtn'), vol = $('vol');
+const playBtn = $('playBtn'), backBtn = $('backBtn'), fwdBtn = $('fwdBtn'), fsBtn = $('fsBtn'), vol = $('vol');
 const icoPlay = $('icoPlay'), icoPause = $('icoPause');
 const chapterLabel = $('chapterLabel'), timeLabel = $('timeLabel');
-const progress = $('progress'), progressFill = $('progressFill');
+const progress = $('progress'), progressFill = $('progressFill'), progressThumb = $('progressThumb');
+let arrastrando = false;
 const belowHost = $('belowHost');
 $('quality').textContent = FLAC_OK ? 'Audio sin pérdida · FLAC 24-bit / 44.1 kHz' : 'Audio AAC 192 kbps';
 
@@ -472,18 +482,52 @@ playBtn.onclick = () => {
   video.paused ? reproducir() : video.pause();
 };
 
-backBtn.onclick = () => {
+/* Salto seguro: pausa, mueve, espera a que cargue y sigue sonando (necesario en celulares) */
+function saltarA(t){
   if (!tramoActual || decisionActual) return;
-  video.currentTime = Math.max(TRAMOS[tramoActual].start, video.currentTime - 10);
-};
+  const tr = TRAMOS[tramoActual];
+  t = Math.min(tr.end - 0.6, Math.max(tr.start, t));
+  const seguia = !video.paused;
+  video.pause();
+  stage.classList.add('loading');
+  const alTerminar = () => {
+    video.removeEventListener('seeked', alTerminar);
+    stage.classList.remove('loading');
+    if (seguia) reproducir();
+  };
+  video.addEventListener('seeked', alTerminar);
+  video.currentTime = t;
+}
 
-progress.onclick = e => {
-  if (!tramoActual || decisionActual) return;
-  const t = TRAMOS[tramoActual];
+backBtn.onclick = () => saltarA(video.currentTime - 10);
+fwdBtn.onclick  = () => saltarA(video.currentTime + 10);
+
+/* Barra arrastrable con dedo o mouse */
+function posDesdeEvento(e){
   const r = progress.getBoundingClientRect();
-  const p = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
-  video.currentTime = t.start + p * (t.end - t.start - 0.5);
+  return Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+}
+function pintarArrastre(p){
+  progressFill.style.width = (p * 100) + '%';
+  progressThumb.style.left = (p * 100) + '%';
+  const tr = TRAMOS[tramoActual];
+  timeLabel.textContent = fmt(p * (tr.end - tr.start)) + ' / ' + fmt(tr.end - tr.start);
+}
+progress.addEventListener('pointerdown', e => {
+  if (!tramoActual || decisionActual) return;
+  arrastrando = true; progress.classList.add('drag');
+  try { progress.setPointerCapture(e.pointerId); } catch(_) {}
+  pintarArrastre(posDesdeEvento(e));
+});
+progress.addEventListener('pointermove', e => { if (arrastrando) pintarArrastre(posDesdeEvento(e)); });
+const soltar = e => {
+  if (!arrastrando) return;
+  arrastrando = false; progress.classList.remove('drag');
+  const tr = TRAMOS[tramoActual];
+  if (tr) saltarA(tr.start + posDesdeEvento(e) * (tr.end - tr.start));
 };
+progress.addEventListener('pointerup', soltar);
+progress.addEventListener('pointercancel', () => { arrastrando = false; progress.classList.remove('drag'); });
 
 vol.oninput = () => { video.volume = +vol.value; };
 
@@ -513,7 +557,7 @@ document.addEventListener('keydown', e => {
 /* ===================== PINTAR INTERFAZ ===================== */
 function actualizarBotones(){
   const activo = !!tramoActual && !decisionActual;
-  playBtn.disabled = !activo; backBtn.disabled = !activo;
+  playBtn.disabled = !activo; backBtn.disabled = !activo; fwdBtn.disabled = !activo;
   const sonando = !video.paused && activo;
   icoPlay.style.display = sonando ? 'none' : '';
   icoPause.style.display = sonando ? '' : 'none';
@@ -524,14 +568,16 @@ video.addEventListener('waiting', () => stage.classList.add('loading'));
 ['playing','canplay','pause'].forEach(ev => video.addEventListener(ev, () => stage.classList.remove('loading')));
 
 function pintarProgreso(){
+  if (arrastrando) return;
   if (!tramoActual) {
-    if (!decisionActual) { progressFill.style.width = recorrido.length ? '100%' : '0%'; }
+    if (!decisionActual) { const w = recorrido.length ? '100%' : '0%'; progressFill.style.width = w; progressThumb.style.left = w; }
     return;
   }
   const t = TRAMOS[tramoActual];
   const dur = t.end - t.start;
   const pos = Math.min(dur, Math.max(0, video.currentTime - t.start));
-  progressFill.style.width = (decisionActual ? 100 : (pos / dur * 100)) + '%';
+  const pct = (decisionActual ? 100 : (pos / dur * 100)) + '%';
+  progressFill.style.width = pct; progressThumb.style.left = pct;
   timeLabel.textContent = fmt(pos) + ' / ' + fmt(dur);
 }
 

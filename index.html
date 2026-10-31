@@ -271,20 +271,20 @@
 const TRAMOS = {
   intro:     { start:0,    end:152,  nombre:'Capítulo 1 · El inicio',         luego:{ decision:'d1' } },
   A:         { start:157,  end:729,  nombre:'Manuel acepta el trabajo',       luego:{ decision:'dA' } },
-  A1:        { start:730,  end:819,  nombre:'Final A1',                       luego:{ tramo:'reflexion' } },
-  A2:        { start:820,  end:889,  nombre:'Final A2',                       luego:{ tramo:'reflexion' } },
+  A1:        { start:730,  end:819,  nombre:'Final · Sigue adelante con el trabajo',                       luego:{ tramo:'reflexion' } },
+  A2:        { start:820,  end:889,  nombre:'Final · Intenta huir',                       luego:{ tramo:'reflexion' } },
   B:         { start:895,  end:982,  nombre:'Manuel rechaza el trabajo',      luego:{ decision:'dB' } },
-  B1:        { start:982,  end:1065, nombre:'Final B1',                       luego:{ tramo:'reflexion' } },
-  B2:        { start:1066, end:1181, nombre:'Final B2',                       luego:{ tramo:'reflexion' } },
+  B1:        { start:982,  end:1065, nombre:'Final · Se mantiene firme',                       luego:{ tramo:'reflexion' } },
+  B2:        { start:1066, end:1181, nombre:'Final · Huye con su abuela',                       luego:{ tramo:'reflexion' } },
   reflexion: { start:1181, end:1288, nombre:'Reflexión final',                luego:{ fin:true } }
 };
 const DECISIONES = {
   d1: { eyebrow:'Toma una decisión', titulo:'¿Qué hace Manuel?', desde:'intro',
         opciones:[ { texto:'Manuel acepta el trabajo', va:'A' }, { texto:'Manuel rechaza el trabajo', va:'B' } ] },
-  dA: { eyebrow:'Elige tu final', titulo:'¿Cómo termina la historia?', desde:'A',
-        opciones:[ { texto:'Final A1', va:'A1' }, { texto:'Final A2', va:'A2' } ] },
-  dB: { eyebrow:'Elige tu final', titulo:'¿Cómo termina la historia?', desde:'B',
-        opciones:[ { texto:'Final B1', va:'B1' }, { texto:'Final B2', va:'B2' } ] }
+  dA: { eyebrow:'Elige tu final', titulo:'Ya no hay vuelta atrás. ¿Qué hace Manuel?', desde:'A',
+        opciones:[ { texto:'Sigue adelante con el trabajo', va:'A1' }, { texto:'Intenta huir', va:'A2' } ] },
+  dB: { eyebrow:'Elige tu final', titulo:'Dijo que no. ¿Y ahora qué hace Manuel?', desde:'B',
+        opciones:[ { texto:'Se mantiene firme', va:'B1' }, { texto:'Huye con su abuela', va:'B2' } ] }
 };
 /* Audio sin pérdida (FLAC 24-bit) donde el navegador lo soporte; si no, AAC 256 kbps */
 const FLAC_OK = !!(window.MediaSource && MediaSource.isTypeSupported &&

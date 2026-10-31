@@ -166,7 +166,8 @@
   }
   .step.on{ color:var(--accent-ink); background:var(--accent); border-color:var(--accent); font-weight:600; }
 
-  footer{ text-align:center; color:var(--muted); font-size:13px; margin-top:26px; }
+  footer{ text-align:center; color:var(--muted); font-size:13px; margin-top:26px; line-height:2.2; }
+  .badge{ display:inline-block; font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--accent-soft); color:var(--accent); }
 
   /* ---------- Pantalla completa ---------- */
   .stage:fullscreen{ aspect-ratio:auto; width:100%; height:100%; }
@@ -259,7 +260,7 @@
 
   <div class="steps" id="steps" aria-label="Tu recorrido"></div>
 
-  <footer>Radionovela interactiva · Tus decisiones cambian el final</footer>
+  <footer><span class="badge" id="quality"></span><br>Radionovela interactiva · Tus decisiones cambian el final</footer>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
@@ -285,7 +286,11 @@ const DECISIONES = {
   dB: { eyebrow:'Elige tu final', titulo:'¿Cómo termina la historia?', desde:'B',
         opciones:[ { texto:'Final B1', va:'B1' }, { texto:'Final B2', va:'B2' } ] }
 };
-const FUENTE = 'media/lista.txt';
+/* Audio sin pérdida (FLAC 24-bit) donde el navegador lo soporte; si no, AAC 256 kbps */
+const FLAC_OK = !!(window.MediaSource && MediaSource.isTypeSupported &&
+  MediaSource.isTypeSupported('audio/mp4; codecs="flac"')) ||
+  !!(window.ManagedMediaSource && ManagedMediaSource.isTypeSupported('audio/mp4; codecs="flac"'));
+const FUENTE = FLAC_OK ? 'hq/flac/lista.txt' : 'hq/aac/lista.txt';
 
 /* ===================== ELEMENTOS ===================== */
 const $ = id => document.getElementById(id);
@@ -296,6 +301,7 @@ const icoPlay = $('icoPlay'), icoPause = $('icoPause');
 const chapterLabel = $('chapterLabel'), timeLabel = $('timeLabel');
 const progress = $('progress'), progressFill = $('progressFill');
 const belowHost = $('belowHost');
+$('quality').textContent = FLAC_OK ? 'Audio sin pérdida · FLAC 24-bit / 44.1 kHz' : 'Audio AAC 192 kbps';
 
 /* ===================== ESTADO ===================== */
 let tramoActual = null;     // clave de TRAMOS
@@ -308,7 +314,7 @@ let listo = false;
 /* ===================== CARGA DEL VIDEO ===================== */
 function cargar(){
   if (window.Hls && Hls.isSupported()) {
-    const hls = new Hls({ maxBufferLength: 30 });
+    const hls = new Hls({ maxBufferLength: 40, maxMaxBufferLength: 80 });
     hls.loadSource(FUENTE);
     hls.attachMedia(video);
     hls.on(Hls.Events.ERROR, (_, d) => {
@@ -317,7 +323,7 @@ function cargar(){
       else if (d.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
     });
   } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-    video.src = FUENTE;                         // iPhone antiguo
+    video.src = 'hq/aac/lista.txt';             // iPhone antiguo
   } else {
     chapterLabel.textContent = 'Tu navegador no puede reproducir este video.';
   }

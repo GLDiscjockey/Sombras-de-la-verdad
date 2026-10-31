@@ -322,8 +322,15 @@ let recorrido = [];         // nombres de los tramos vistos
 let listo = false;
 
 /* ===================== CARGA DEL VIDEO ===================== */
+/* En iPhone/iPad se usa el reproductor nativo de Safari: es el único que adelanta bien */
+const ES_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
 function cargar(){
-  if (window.Hls && Hls.isSupported()) {
+  if (ES_IOS && video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = 'hq/aac/lista.m3u8';
+    $('quality').textContent = 'Audio AAC 192 kbps';
+  } else if (window.Hls && Hls.isSupported()) {
     const hls = new Hls({ maxBufferLength: 40, maxMaxBufferLength: 80 });
     hls.loadSource(FUENTE);
     hls.attachMedia(video);
@@ -333,7 +340,7 @@ function cargar(){
       else if (d.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
     });
   } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-    video.src = 'hq/aac/lista.txt';             // iPhone antiguo
+    video.src = 'hq/aac/lista.m3u8';
   } else {
     chapterLabel.textContent = 'Tu navegador no puede reproducir este video.';
   }
